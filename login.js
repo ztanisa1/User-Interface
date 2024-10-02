@@ -13,10 +13,7 @@ const firebaseConfig = {
 // Initialize Firebase
 firebase.initializeApp(firebaseConfig);
 const auth = firebase.auth();
-const db = firebase.firestore();
-
-const database =firebase.database();
-var database_ref = database.ref();
+const database = firebase.database();
 let loginAttempts = 0;
 
 function validateLogin() {
@@ -26,19 +23,23 @@ function validateLogin() {
     // Attempt to log in with Firebase
     auth.signInWithEmailAndPassword(username, password)
         .then((userCredential) => {
-            var user = auth.currentUser;
-            var user_data = {
-                lastLogin : Date.now()
-              }
-            // Push to Firebase Database
-            database_ref.child('users/' + user.uid).update(user_data) 
-            checkUserRole(username);
+            const user = auth.currentUser;
+            const user_data = {
+                lastLogin: Date.now()
+            };
+
+            // Push to Firebase Realtime Database
+            database.ref('users/' + user.uid).update(user_data);
+
+            // Check user role and redirect accordingly
+            checkUserRole(user.uid);
         })
         .catch((error) => {
-            const errorMessage = error.message;
             loginAttempts++;
+            const errorMessage = error.message;
             if (loginAttempts >= 3) {
                 alert("Too many failed login attempts. Your account is suspended.");
+                // Optional: Handle account suspension logic here.
             } else {
                 alert(`Error: ${errorMessage}`);
             }
@@ -46,16 +47,16 @@ function validateLogin() {
     return false; // Prevent default form submission
 }
 
-function checkUserRole(email) {
-    var user = auth.currentUser;
-    var userRoleRef = database_ref.child('users/'+ user.uid +'/role').value;
-    userRoleRef.on('value', (snapshot) => {
-        const userRole =snapshot.val();
-    });
-        if (userRole == "Admin") {
-            window.location.assign = "admin.html";
+function checkUserRole(userId) {
+    const userRoleRef = database.ref('users/' + userId + '/role');
+    userRoleRef.once('value', (snapshot) => {
+        const userRole = snapshot.val();
+        if (userRole === "Admin") {
+            window.location.assign("admin.html");
+        } else {
+            window.location.assign("user.html");
         }
-        window.location.assign ="user.html";
+    });
 }
 
 function createNewUser() {
@@ -66,24 +67,29 @@ function createNewUser() {
     const email = document.getElementById("newEmail").value;
     const password = document.getElementById("newPassword").value;
     const role = document.getElementById("Role").value;
+
     auth.createUserWithEmailAndPassword(email, password)
-    .then(function() {
-      // Declare user variable
-    var user = auth.currentUser
-    var user_data = {
-        email : email,
-        password : password,
-        firstName : firstName,
-        lastName : lastName,
-        dob : dob,
-        address : address,
-        role : role,
-        lastLogin : Date.now()
-    }
-    database_ref.child('users/' + user.uid).set(user_data);
-    closeModal('createUserModal');
-    })
+        .then((userCredential) => {
+            const user = auth.currentUser;
+            const user_data = {
+                email: email,
+                firstName: firstName,
+                lastName: lastName,
+                dob: dob,
+                address: address,
+                role: role,
+                lastLogin: Date.now()
+            };
+
+            // Save user data to Firebase Realtime Database
+            database.ref('users/' + user.uid).set(user_data);
+            closeModal('createUserModal');
+        })
+        .catch((error) => {
+            alert(`Error creating user: ${error.message}`);
+        });
 }
+
 // Modal control functions
 function openForgotPasswordModal() {
     document.getElementById("forgotPasswordModal").style.display = "block";
